@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VGEN — Gerador de Vídeo IA</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg:      #0a0a0f;
+    --surface: #111118;
+    --border:  #1e1e2e;
+    --border2: #2a2a3e;
+    --text:    #e8e8f0;
+    --muted:   #5a5a7a;
+    --accent:  #7c6af7;
+    --accent2: #c084fc;
+    --green:   #4ade80;
+    --red:     #f87171;
+    --amber:   #fbbf24;
+    --mono:    'DM Mono', monospace;
+    --sans:    'Syne', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--mono); min-height: 100vh; display: flex; flex-direction: column; }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0;
+    background: rgba(10,10,15,0.92);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+  .logo { font-family: var(--sans); font-weight: 800; font-size: 1.3rem; letter-spacing: -0.03em; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .logo span { -webkit-text-fill-color: var(--muted); font-weight: 400; font-size: 0.8rem; margin-left: 8px; letter-spacing: 0.1em; }
+  .header-pill { font-size: 0.7rem; padding: 4px 10px; border: 1px solid var(--border2); border-radius: 999px; color: var(--muted); letter-spacing: 0.08em; }
+
+  .app { flex: 1; display: grid; grid-template-columns: 380px 1fr; max-width: 1200px; margin: 0 auto; width: 100%; padding: 32px 24px; gap: 0; }
+
+  .panel { padding-right: 28px; display: flex; flex-direction: column; gap: 20px; }
+  .field-group { display: flex; flex-direction: column; gap: 8px; }
+  .field-label { font-size: 0.68rem; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; }
+
+  textarea, input[type="text"], input[type="password"], select {
+    background: var(--surface); border: 1px solid var(--border2); border-radius: 8px;
+    color: var(--text); font-family: var(--mono); font-size: 0.82rem;
+    padding: 12px 14px; outline: none; transition: border-color 0.2s; width: 100%; resize: none;
+  }
+  textarea:focus, input:focus, select:focus { border-color: var(--accent); }
+  textarea { height: 110px; line-height: 1.6; }
+
+  .model-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .model-card { border: 1px solid var(--border2); border-radius: 8px; padding: 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; position: relative; }
+  .model-card:hover { border-color: var(--accent); background: rgba(124,106,247,0.04); }
+  .model-card.selected { border-color: var(--accent); background: rgba(124,106,247,0.09); }
+  .model-card.selected::after { content: '✓'; position: absolute; top: 8px; right: 10px; font-size: 0.7rem; color: var(--accent); }
+  .model-name { font-family: var(--sans); font-size: 0.78rem; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+  .model-meta { font-size: 0.65rem; color: var(--muted); line-height: 1.4; }
+  .model-badge { display: inline-block; font-size: 0.58rem; padding: 2px 6px; border-radius: 4px; margin-top: 4px; letter-spacing: 0.06em; }
+  .badge-free { background: rgba(74,222,128,0.12); color: var(--green); }
+  .badge-paid { background: rgba(251,191,36,0.12); color: var(--amber); }
+
+  .slider-row { display: flex; align-items: center; gap: 12px; }
+  input[type="range"] { flex: 1; height: 4px; appearance: none; background: var(--border2); border-radius: 2px; outline: none; cursor: pointer; border: none; padding: 0; }
+  input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+  .slider-val { font-size: 0.75rem; color: var(--accent); min-width: 28px; text-align: right; }
+
+  .btn-generate { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: 8px; padding: 14px; font-family: var(--sans); font-size: 0.9rem; font-weight: 700; cursor: pointer; letter-spacing: 0.04em; transition: opacity 0.2s, transform 0.1s; width: 100%; }
+  .btn-generate:hover:not(:disabled) { opacity: 0.9; }
+  .btn-generate:active:not(:disabled) { transform: scale(0.99); }
+  .btn-generate:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .key-hint { font-size: 0.65rem; color: var(--muted); line-height: 1.5; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,0.015); }
+  .key-hint a { color: var(--accent); text-decoration: none; }
+
+  .output-panel { border-left: 1px solid var(--border); padding-left: 28px; display: flex; flex-direction: column; gap: 16px; }
+  .output-header { display: flex; align-items: center; justify-content: space-between; }
+  .output-title { font-family: var(--sans); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 6px; }
+  .status-dot.running { background: var(--amber); animation: pulse 1s infinite; }
+  .status-dot.done    { background: var(--green); }
+  .status-dot.error   { background: var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .video-box { background: var(--surface); border: 1px solid var(--border2); border-radius: 12px; min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+  .video-box video { width: 100%; border-radius: 12px; display: block; }
+  .video-placeholder { display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--muted); }
+  .video-placeholder svg { opacity: 0.25; }
+  .video-placeholder p { font-size: 0.75rem; letter-spacing: 0.08em; }
+
+  .progress-wrap { height: 2px; background: var(--border2); border-radius: 1px; overflow: hidden; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 1px; transition: width 0.4s ease; width: 0%; }
+
+  .log-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-size: 0.7rem; color: var(--muted); line-height: 1.8; min-height: 80px; max-height: 160px; overflow-y: auto; font-family: var(--mono); }
+  .log-line.info  { color: var(--muted); }
+  .log-line.ok    { color: var(--green); }
+  .log-line.warn  { color: var(--amber); }
+  .log-line.error { color: var(--red); }
+
+  .action-row { display: flex; gap: 10px; }
+  .btn-action { flex: 1; background: transparent; border: 1px solid var(--border2); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 0.75rem; padding: 10px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .btn-action:hover:not(:disabled) { border-color: var(--accent); background: rgba(124,106,247,0.06); }
+  .btn-action:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn-action.primary { border-color: var(--accent); color: var(--accent); }
+
+  .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+  .history-thumb { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; cursor: pointer; transition: border-color 0.15s; aspect-ratio: 16/9; background: var(--surface); display: flex; align-items: center; justify-content: center; }
+  .history-thumb:hover { border-color: var(--accent); }
+  .history-thumb video { width: 100%; height: 100%; object-fit: cover; }
+
+  .divider { height: 1px; background: var(--border); }
+
+  @media (max-width: 768px) {
+    .app { grid-template-columns: 1fr; padding: 16px; }
+    .panel { padding-right: 0; padding-bottom: 24px; }
+    .output-panel { border-left: none; border-top: 1px solid var(--border); padding-left: 0; padding-top: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">VGEN<span>AI VIDEO GENERATOR</span></div>
+  <div class="header-pill">SEM WATERMARK</div>
+</header>
+
+<div class="app">
+  <div class="panel">
+
+    <div class="field-group">
+      <div class="field-label">Modelo</div>
+      <div class="model-grid">
+        <div class="model-card selected" onclick="selectModel(this,'wan')">
+          <div class="model-name">Wan 2.1</div>
+          <div class="model-meta">Text-to-video · 5s · 480p</div>
+          <span class="model-badge badge-free">OPEN SOURCE</span>
+        </div>
+        <div class="model-card" onclick="selectModel(this,'mochi')">
+          <div class="model-name">Mochi 1</div>
+          <div class="model-meta">Text-to-video · 5s · 480p</div>
+          <span class="model-badge badge-free">OPEN SOURCE</span>
+        </div>
+        <div class="model-card" onclick="selectModel(this,'ltx')">
+          <div class="model-name">LTX Video</div>
+          <div class="model-meta">Text-to-video · até 30s</div>
+          <span class="model-badge badge-free">OPEN SOURCE</span>
+        </div>
+        <div class="model-card" onclick="selectModel(this,'hunyuan')">
+          <div class="model-name">HunyuanVideo</div>
+          <div class="model-meta">Text-to-video · 6s · 720p</div>
+          <span class="model-badge badge-paid">REPLICATE</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Prompt</div>
+      <textarea id="prompt" placeholder="Descreve o vídeo. Ex: 'Cinematic shot of a futuristic city at night, neon reflections on wet streets, slow pan...'"></textarea>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Prompt Negativo</div>
+      <textarea id="neg-prompt" style="height:60px">blur, low quality, watermark, text overlay, distorted faces</textarea>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Passos de Inferência</div>
+      <div class="slider-row">
+        <input type="range" id="steps" min="10" max="50" value="25" oninput="document.getElementById('steps-val').textContent=this.value">
+        <span class="slider-val" id="steps-val">25</span>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">CFG Scale</div>
+      <div class="slider-row">
+        <input type="range" id="cfg" min="1" max="12" step="0.5" value="7" oninput="document.getElementById('cfg-val').textContent=this.value">
+        <span class="slider-val" id="cfg-val">7</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="field-group">
+      <div class="field-label">Replicate API Key</div>
+      <input type="password" id="api-key" placeholder="r8_xxxxxxxxxxxxxxxxxxxx">
+      <div class="key-hint">
+        Cria conta em <a href="https://replicate.com" target="_blank">replicate.com</a> → Account → API Tokens → Create token. A key só fica no teu browser.
+      </div>
+    </div>
+
+    <button class="btn-generate" id="btn-gen" onclick="generate()">▶ Gerar Vídeo</button>
+
+  </div>
+
+  <div class="output-panel">
+
+    <div class="output-header">
+      <div class="output-title">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Aguardando</span>
+      </div>
+      <div style="font-size:0.68rem;color:var(--muted)" id="elapsed-time"></div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <div class="video-box" id="video-box">
+      <div class="video-placeholder">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+        </svg>
+        <p>O vídeo aparecerá aqui</p>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn-action primary" id="btn-download" disabled onclick="downloadVideo()">↓ Download MP4</button>
+      <button class="btn-action" id="btn-copy-url" disabled onclick="copyUrl()">⎘ Copiar URL</button>
+      <button class="btn-action" onclick="resetOutput()">✕ Limpar</button>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Log</div>
+      <div class="log-box" id="log-box">
+        <span class="log-line info">// Pronto. Insere o prompt e a API key.</span>
+      </div>
+    </div>
+
+    <div id="history-section" style="display:none">
+      <div class="field-label" style="margin-bottom:10px">Histórico desta sessão</div>
+      <div class="history-grid" id="history-grid"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let selectedModel = 'wan';
+  let currentVideoUrl = null;
+  let timerInterval = null;
+
+  const MODELS = {
+    wan:      { model: 'wavespeedai/wan-2.1-t2v-480p' },
+    mochi:    { model: 'genmoai/mochi-1' },
+    ltx:      { model: 'lightricks/ltx-video' },
+    hunyuan:  { model: 'tencent/hunyuan-video' }
+  };
+
+  function selectModel(el, model) {
+    document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedModel = model;
+  }
+
+  function log(msg, type = 'info') {
+    const box = document.getElementById('log-box');
+    const ts = new Date().toLocaleTimeString('pt', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    box.innerHTML += `<br><span class="log-line ${type}">[${ts}] ${msg}</span>`;
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function setStatus(state, text) {
+    document.getElementById('status-dot').className = `status-dot ${state}`;
+    document.getElementById('status-text').textContent = text;
+  }
+
+  function setProgress(pct) {
+    document.getElementById('progress-bar').style.width = pct + '%';
+  }
+
+  // Proxy endpoint — same origin, sem CORS
+  async function proxyCall(path, body = null) {
+    const apiKey = document.getElementById('api-key').value.trim();
+    const res = await fetch('/api/replicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ path, body })
+    });
+    return res.json();
+  }
+
+  async function generate() {
+    const prompt = document.getElementById('prompt').value.trim();
+    const negPrompt = document.getElementById('neg-prompt').value.trim();
+    const apiKey = document.getElementById('api-key').value.trim();
+    const steps = document.getElementById('steps').value;
+    const cfg = document.getElementById('cfg').value;
+
+    if (!prompt) { log('⚠ Insere um prompt.', 'warn'); return; }
+    if (!apiKey)  { log('⚠ Insere a API key.', 'warn'); return; }
+
+    const btn = document.getElementById('btn-gen');
+    btn.disabled = true; btn.textContent = '⏳ Gerando...';
+    currentVideoUrl = null;
+    document.getElementById('btn-download').disabled = true;
+    document.getElementById('btn-copy-url').disabled = true;
+    setProgress(5); setStatus('running', 'Submetendo...');
+
+    const start = Date.now();
+    timerInterval = setInterval(() => {
+      document.getElementById('elapsed-time').textContent = ((Date.now() - start) / 1000).toFixed(0) + 's';
+    }, 1000);
+
+    const modelId = MODELS[selectedModel].model;
+    log(`Modelo: ${modelId}`, 'info');
+    log(`Prompt: "${prompt.slice(0,80)}${prompt.length>80?'...':''}"`, 'info');
+
+    try {
+      const input = {
+        prompt,
+        negative_prompt: negPrompt,
+        num_inference_steps: parseInt(steps),
+        guidance_scale: parseFloat(cfg)
+      };
+      if (selectedModel === 'ltx') { input.width = 704; input.height = 480; input.num_frames = 121; }
+      if (selectedModel === 'wan') { input.num_frames = 81; input.fps = 16; }
+
+      const pred = await proxyCall('predictions', { model: modelId, input });
+      if (!pred.id) throw new Error(pred.detail || pred.error || 'Erro ao criar prediction');
+      log(`ID: ${pred.id}`, 'ok');
+      setProgress(15);
+
+      // Poll
+      let attempts = 0;
+      while (attempts++ < 300) {
+        await new Promise(r => setTimeout(r, 2500));
+        const status = await proxyCall(`predictions/${pred.id}`);
+
+        if (status.logs) {
+          const lines = status.logs.split('\n').filter(Boolean);
+          const last = lines[lines.length - 1];
+          if (last && last !== window._lastLog) {
+            window._lastLog = last;
+            const m = last.match(/(\d+)%/);
+            if (m) setProgress(Math.min(95, 15 + parseInt(m[1]) * 0.8));
+          }
+        }
+
+        if (status.status === 'succeeded') {
+          const url = Array.isArray(status.output) ? status.output[0] : status.output;
+          if (!url) throw new Error('Output vazio');
+          currentVideoUrl = url;
+          setProgress(100); setStatus('done', 'Concluído');
+          clearInterval(timerInterval);
+          renderVideo(url);
+          addHistory(url, prompt);
+          log('✓ Vídeo pronto!', 'ok');
+          log(`URL: ${url}`, 'info');
+          document.getElementById('btn-download').disabled = false;
+          document.getElementById('btn-copy-url').disabled = false;
+          break;
+        } else if (status.status === 'failed') {
+          throw new Error(status.error || 'Falha na geração');
+        } else {
+          setStatus('running', status.status === 'starting' ? 'A iniciar...' : 'Processando...');
+        }
+      }
+    } catch (err) {
+      log(`Erro: ${err.message}`, 'error');
+      setStatus('error', 'Erro'); setProgress(0);
+      clearInterval(timerInterval);
+    }
+
+    btn.disabled = false; btn.textContent = '▶ Gerar Vídeo';
+  }
+
+  function renderVideo(url) {
+    document.getElementById('video-box').innerHTML =
+      `<video controls autoplay loop muted style="width:100%;border-radius:12px"><source src="${url}" type="video/mp4"></video>`;
+  }
+
+  function addHistory(url, prompt) {
+    document.getElementById('history-section').style.display = 'block';
+    const grid = document.getElementById('history-grid');
+    const t = document.createElement('div');
+    t.className = 'history-thumb'; t.title = prompt;
+    t.innerHTML = `<video src="${url}" muted loop></video>`;
+    t.addEventListener('mouseenter', () => t.querySelector('video').play());
+    t.addEventListener('mouseleave', () => t.querySelector('video').pause());
+    t.addEventListener('click', () => renderVideo(url));
+    grid.prepend(t);
+  }
+
+  function downloadVideo() {
+    if (!currentVideoUrl) return;
+    const a = document.createElement('a');
+    a.href = currentVideoUrl; a.download = `vgen_${Date.now()}.mp4`; a.target = '_blank';
+    a.click();
+    log('↓ Download iniciado.', 'ok');
+  }
+
+  function copyUrl() {
+    if (!currentVideoUrl) return;
+    navigator.clipboard.writeText(currentVideoUrl);
+    log('⎘ URL copiado.', 'ok');
+  }
+
+  function resetOutput() {
+    document.getElementById('video-box').innerHTML = `
+      <div class="video-placeholder">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+        </svg>
+        <p>O vídeo aparecerá aqui</p>
+      </div>`;
+    setProgress(0); setStatus('', 'Aguardando');
+    document.getElementById('elapsed-time').textContent = '';
+    document.getElementById('btn-download').disabled = true;
+    document.getElementById('btn-copy-url').disabled = true;
+    currentVideoUrl = null;
+    log('// Output limpo.', 'info');
+  }
+</script>
+</body>
+</html>
