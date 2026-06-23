@@ -1,5 +1,9 @@
 {
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/replicate" }
-  ]
+"rewrites": [
+{
+"source": "/api/(.*)",
+"destination": "/api/generate"
 }
+]
+}
+
