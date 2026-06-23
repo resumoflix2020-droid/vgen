@@ -246,11 +246,10 @@
   let timerInterval = null;
 
   const MODELS = {
-    wan:      { model: 'wavespeedai/wan-2.1-t2v-480p' },
-    mochi:    { model: 'genmoai/mochi-1' },
-    ltx:      { model: 'lightricks/ltx-video' },
-    hunyuan:  { model: 'tencent/hunyuan-video' }
-  };
+  wan: {
+    name: "Wan 2.1"
+  }
+};
 
   function selectModel(el, model) {
     document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
@@ -275,16 +274,25 @@
   }
 
   // Proxy endpoint — same origin, sem CORS
-  async function proxyCall(path, body = null) {
-    const apiKey = document.getElementById('api-key').value.trim();
-    const res = await fetch('/api/replicate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ path, body })
-    });
-    return res.json();
-  }
+ async function generateVideo(payload) {
 
+  const apiKey =
+    document.getElementById('api-key').value.trim();
+
+  const response = await fetch(
+    '/api/generate',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  return response.json();
+}
   async function generate() {
     const prompt = document.getElementById('prompt').value.trim();
     const negPrompt = document.getElementById('neg-prompt').value.trim();
@@ -321,46 +329,11 @@
       if (selectedModel === 'ltx') { input.width = 704; input.height = 480; input.num_frames = 121; }
       if (selectedModel === 'wan') { input.num_frames = 81; input.fps = 16; }
 
-      const pred = await proxyCall('predictions', { model: modelId, input });
-      if (!pred.id) throw new Error(pred.detail || pred.error || 'Erro ao criar prediction');
-      log(`ID: ${pred.id}`, 'ok');
-      setProgress(15);
-
-      // Poll
-      let attempts = 0;
-      while (attempts++ < 300) {
-        await new Promise(r => setTimeout(r, 2500));
-        const status = await proxyCall(`predictions/${pred.id}`);
-
-        if (status.logs) {
-          const lines = status.logs.split('\n').filter(Boolean);
-          const last = lines[lines.length - 1];
-          if (last && last !== window._lastLog) {
-            window._lastLog = last;
-            const m = last.match(/(\d+)%/);
-            if (m) setProgress(Math.min(95, 15 + parseInt(m[1]) * 0.8));
-          }
-        }
-
-        if (status.status === 'succeeded') {
-          const url = Array.isArray(status.output) ? status.output[0] : status.output;
-          if (!url) throw new Error('Output vazio');
-          currentVideoUrl = url;
-          setProgress(100); setStatus('done', 'Concluído');
-          clearInterval(timerInterval);
-          renderVideo(url);
-          addHistory(url, prompt);
-          log('✓ Vídeo pronto!', 'ok');
-          log(`URL: ${url}`, 'info');
-          document.getElementById('btn-download').disabled = false;
-          document.getElementById('btn-copy-url').disabled = false;
-          break;
-        } else if (status.status === 'failed') {
-          throw new Error(status.error || 'Falha na geração');
-        } else {
-          setStatus('running', status.status === 'starting' ? 'A iniciar...' : 'Processando...');
-        }
-      }
+     const result = await generateVideo({
+  prompt,
+  size: "480*832",
+  duration: 5
+});
     } catch (err) {
       log(`Erro: ${err.message}`, 'error');
       setStatus('error', 'Erro'); setProgress(0);
